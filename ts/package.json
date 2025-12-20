@@ -1,0 +1,24 @@
+{
+  "name": "ta-handler",
+  "version": "1.0.0",
+  "description": "",
+  "type": "module",
+  "exports": {
+    ".": {
+        "types": "./dist/index.d.cts"
+    }
+  },
+  "scripts": {
+    "build": "tsdown src/index.ts --format=esm --dts",
+    "test": "echo \"No tests required\" && exit 0"
+  },
+  "keywords": [],
+  "author": "Ken Snyder<ken@ken.net>",
+  "license": "MIT",
+  "packageManager": "pnpm@10.25.0",
+  "devDependencies": {
+    "bumpp": "^10.3.2",
+    "tsdown": "^0.18.1",
+    "typescript": "^5.9.3"
+  }
+}
