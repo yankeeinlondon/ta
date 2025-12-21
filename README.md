@@ -1,106 +1,252 @@
-# TA (Typescript Analyzer)
+# TA (TypeScript Analyzer)
 
-> a speedy AST analyzer written in Rust and using OXC under the hood
+> A speedy AST analyzer written in Rust using OXC (Oxidation Compiler)
+
+**Status:** Core functionality implemented. See [Roadmap](#roadmap) for planned features.
 
 ## Modules
 
-1. Library `/lib` 
+1. **Library** (`/lib`)
+   - Core TypeScript analysis engine
+   - Parallel processing with Rayon
+   - OXC-based AST parsing and semantic analysis
 
-    - provides the support code to analyze typescript files or whole code bases
+2. **CLI** (`/cli`)
+   - Command-line interface exposing library features
+   - Three output formats: Console (ANSI), JSON, HTML
+   - Built with clap and color-eyre
 
-2. CLI `/cli`
-
-    - a CLI which exposes the features developed in the Library module
-
-3. Typescript Handlers `/ts`
-
-    - export Typescript types used for defining Typescript handlers for the `watch` command
+3. **TypeScript Handlers** (`/ts`)
+   - TypeScript type definitions for watch event handlers
+   - Designed for use with Bun runtime (planned feature)
 
 ## Features
 
-- Type Errors in Source Code (cli: `ta source <filter>`)
+### Type Errors in Source Code
 
-    - is able to analyze either a file, a file subset, or an entire repo and report on the type errors which exist
-        - when an entire repo is selected it will try to **exclude** the test files from it's report
-    - in addition to the type error (id, message), line number, and other basics you'd expect in a error diagnostic this library provides the following:
-        - `scope` - a text descriptor of where the error occurred following the format:
-            - `${file}::${symbol}` when the error occurred inside a function
-            - `${file}::${class}:${method}` when the error occurred inside a class method
-            - `${file}::root` when the error occurred outside any block based symbol
-        - `block` - a _plain text_ representation of the code block where the error occurred
-            - if it's inside a function/class method then the full function/method definition
-            - if it's scope is `root` based then just the line the error occurred with the preceding and following lines until an empty line is encountered
-        - `blockHtml` - same as `block` but with HTML based code highlighting 
-        - `blockConsole` - same as `block` but with code highlighting via escape sequences
+**Command:** `ta source <filter>`
 
-- Exported Symbols (cli: `ta symbols <filter>`)
+Analyzes TypeScript files for type errors using OXC's semantic analyzer.
 
-    - provides a list of all symbols which are exported in the repo
-    - filtering by symbol type (function, type, class, etc.) available
-    - reporting includes:
-        - structured data such as:
-            - name
-            - file
-            - start_line
-            - end_line
-            - ... and more on a per symbol type basis (e.g., `parameters` for functions, etc.)
-        - an HTML representation of the symbol's summary (not details)
-        - a Console representation of the symbol's summary (not details)
+**Options:**
 
-- Type Tests (cli: `ta test <filter>`)
+- `<filter>` - Glob pattern (default: `src/**/*.ts`)
+- `--filter <text>` - Filter errors by message or scope
+- `--max-errors <n>` - Limit number of errors reported (default: 100)
+- `--include-tests` - Include test files in analysis (⚠️ *not yet implemented*)
 
-    - will try to detect the tests directory or can be explicitly directed to it
-    - with the tests directories identified it will report on type tests where a "type test":
-        - Is bounded in a `describe()` -> `it()`/`test()` block structure common to many test runners
-        - It will look for `type cases = [ test, test, test ]` definitions in the test files
-        - Test blocks that do not have a type test block will be reported on 
+**Output includes:**
 
-- File Dependencies (cli: `ta file <filter>`)
+- `message` - Error description from OXC diagnostics
+- `line`, `column` - Error location
+- `scope` - Context where error occurred:
+    - `${symbol}` - Inside a function
+    - `${class}::${method}` - Inside a class method
+    - `global` - At module/file root level
+- `block` - Code snippet where error occurred
 
-    - identifies a file's dependencies on other files in the repo as well as external packages
-    - when no filter is applied it will iterate over all source files (not test files) and report their 
+**Formatting:**
 
-- Symbol Dependencies (cli: `ta deps <filter>`)
+- Console: Syntax highlighting with ANSI escape codes
+- HTML: Wrapped in `<div class="error-block">` with `data-error-id` attribute
+- JSON: Raw structured data
 
-    - identifies a symbol's dependencies on other symbols
-    - these dependencies are scoped to:
-        - `local` - dependency on a symbol in same file
-        - `repo` - dependency on a symbol within the repo but in a different file
-        - `module` - when in a monorepo, this would indicate a symbol's dependency on a symbol from another module in the monorepo
-        - `external` - dependency is on a symbol from an external package
+### Exported Symbols
 
-- Watcher mode (cli: `ta watch <handler> <...handler>`)
+**Command:** `ta symbols <filter>`
 
-    - watches the file system for file changes and fires events for any provided handlers
-    - events include
-        - sourceFileChanged
-        - sourceFileCreated
-        - sourceFileRemoved
-        - symbolRenamed
-        - symbolAdded
-        - symbolRemoved
-        - moduleDepChanged
-        - externalDepChanged
-        - testStatusChanged - called whenever a _type test_ changes from one status to another
-        - newFailingTest - called whenever a test that _was_ passing is now failing
-        - testFixed - called whenever a test that _was_ failing is now passing
-        - newTestAdded - called when a new test block is added to tests
-    - handlers are defined by adding `--${Event} ${Executable}` to the `ta watch` call
-        - the `${Executable}` is either something the system can execute natively (and execute permissions set on POSIX systems)
-        - but it can also be a Typescript file with an event handler function:
-            
-            ```ts
-            export const onSourceFileChanged: SourceFileChangedHandler = (evt) => { ... }
-            ```
+Extracts all exported symbols from TypeScript files.
 
-        - as long as the system has `Bun` installed and the appropriately named handler exists in the 
+**Options:**
 
-> **Note:** all CLI commands will output to STDOUT and where status, progress, or summary messages are provided these will be sent over STDERR
->
-> **Note:** the output format is by default optimized for consumption in the terminal/console (using console escape sequences to provide useful colorful reports); however all commands support `--json` and `--html` switches to modify the output format. When JSON is output the information provided will be much more verbose.
->
-> **Note:**
-> 
-> - JSON output is information rich and includes `console` and `html` properties which include the console-optimized and html-optimized summary output.
-> - CONSOLE output is just the console-optimized (e.g., colorized with escape codes) summary information and is the least information rich
-> - HTML output displays the HTML optimized summary information (same info as console but with span/class blocks indicating formatting) but it adds additional metadata in `data-xxx` properties in the wrapping `<span>` block.
+- `<filter>` - Glob pattern or file path
+- `--exported-only` - Only show exported symbols (default: all symbols)
+
+**Symbol types detected:**
+
+- Functions (with parameters and type annotations)
+- Classes (with properties and methods)
+- Interfaces
+- Type aliases
+- Enums
+- Variables
+
+**Output fields:**
+
+- `name`, `kind`, `file`
+- `start_line`, `end_line`
+- `exported` - Boolean flag
+- `parameters` - For functions (name + type annotation)
+- `properties` - For classes (name + type annotation)
+
+### Type Tests
+
+**Command:** `ta test <filter>`
+
+Detects type tests in test files.
+
+**Detection criteria:**
+
+- Looks for `describe()` → `it()`/`test()` block structure
+- Identifies `type cases = [...]` patterns
+- Reports test status (Passing/Failing/NoTypeCases)
+
+**Output:**
+
+- `file`, `describe_block`, `test_name`, `line`
+- `has_type_cases` - Boolean
+- `status` - Test status enum
+
+### File Dependencies
+
+**Command:** `ta file <filter>`
+
+Analyzes file-level dependencies.
+
+**Detects:**
+
+- `import` declarations
+- `export ... from` statements
+- Re-exports (`export *`)
+
+**Output:**
+
+- `file` - Source file path
+- `repo_dependencies` - Local file imports
+- `external_dependencies` - Package imports
+
+### Symbol Dependencies
+
+**Command:** `ta deps <filter>`
+
+Analyzes symbol-level dependencies (planned feature).
+
+**Scope types:**
+
+- `local` - Symbol in same file
+- `repo` - Symbol in different file (same repo)
+- `module` - Symbol in different monorepo module
+- `external` - Symbol from external package
+
+⚠️ *Symbol-level dependency tracking not fully implemented*
+
+### File Watcher
+
+**Command:** `ta watch [paths...]`
+
+Watches TypeScript files for changes and detects events.
+
+**Current implementation:**
+
+- Monitors file system changes with debouncing (500ms)
+- Detects and logs events to console
+- Events supported:
+    - `SymbolAdded` - New exported symbol detected
+    - `SymbolRemoved` - Exported symbol deleted
+    - `TestStatusChanged` - Type test status changed
+    - `NewFailingTest` - Previously passing test now fails
+    - `TestFixed` - Previously failing test now passes
+    - `NewTestAdded` - New test block added
+
+**Planned features** (⚠️ *not yet implemented*):
+
+- External handler execution via `--${Event} ${Executable}` syntax
+- TypeScript handler support with Bun:
+
+  ```ts
+  export const onSourceFileChanged: SourceFileChangedHandler = (evt) => { ... }
+  ```
+
+- Additional events: `SourceFileChanged`, `SourceFileCreated`, `SourceFileRemoved`, `SymbolRenamed`, `ModuleDepChanged`, `ExternalDepChanged` 
+
+## Output Formats
+
+All commands support `--format <type>` where type is:
+
+### Console (default)
+
+- ANSI escape sequences for terminal colors and formatting
+- Syntax highlighting for TypeScript code blocks
+- Concise, human-readable output
+- Data to STDOUT, progress/status to STDERR
+
+### JSON (`--format json`)
+
+- Structured data serialization via serde_json
+- Complete information for programmatic consumption
+- All fields included (spans, locations, metadata)
+
+### HTML (`--format html`)
+
+- Wrapped in semantic HTML elements
+- Metadata in `data-*` attributes
+- CSS class-based styling hooks
+- Example: `<div class="error-block" data-error-id="...">`
+
+## Installation
+
+```bash
+# Build from source
+cargo build --release
+
+# Run directly
+cargo run -p cli -- source "src/**/*.ts"
+
+# Install globally
+cargo install --path cli
+```
+
+## Examples
+
+```bash
+# Analyze all source files for type errors
+ta source "src/**/*.ts"
+
+# Extract symbols with JSON output
+ta --format json symbols "lib/**/*.ts" > symbols.json
+
+# Watch current directory for changes
+ta watch .
+
+# Analyze specific file's dependencies
+ta file src/analyzer.rs
+```
+
+## Roadmap
+
+### Planned Features
+
+- [ ] External handler execution in watch mode (Bun + native executables)
+- [ ] Test file exclusion in `ta source` (via `--include-tests` flag)
+- [ ] Parse actual error IDs from OXC diagnostics (currently hardcoded)
+- [ ] Symbol-level dependency analysis
+- [ ] Additional watch events (file changes, renames, etc.)
+- [ ] Enhanced JSON output with console/HTML representations
+
+### Completed
+
+- [x] Type error detection with scope tracking
+- [x] Symbol extraction (functions, classes, types, etc.)
+- [x] File dependency analysis
+- [x] Type test detection
+- [x] File watching with event detection
+- [x] Three output formats (Console/JSON/HTML)
+- [x] Parallel file processing with Rayon
+
+## Technical Details
+
+- **Parser:** OXC 0.30 (Oxidation Compiler)
+- **CLI:** clap 4.5 (derive API)
+- **Error Handling:** color-eyre + thiserror
+- **Parallelism:** Rayon for multi-threaded analysis
+- **File Watching:** notify-debouncer-full
+- **Edition:** Rust 2021
+
+## Performance
+
+OXC provides 10-50x faster parsing than TSC. The analyzer leverages:
+
+- Arena allocation for zero-cost AST memory management
+- Parallel file processing (disabled for single files)
+- Debounced file watching (500ms delay)
+- Release builds with LTO enabled

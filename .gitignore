@@ -57,3 +57,4 @@ trace/*
 .trace/*
 
 **/target/*
+target/**/*
