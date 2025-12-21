@@ -47,7 +47,7 @@
         - an HTML representation of the symbol's summary (not details)
         - a Console representation of the symbol's summary (not details)
 
-- Type Tests (cli: `ta test`)
+- Type Tests (cli: `ta test <filter>`)
 
     - will try to detect the tests directory or can be explicitly directed to it
     - with the tests directories identified it will report on type tests where a "type test":
