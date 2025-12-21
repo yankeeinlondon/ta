@@ -75,6 +75,11 @@ impl OutputFormatter {
                 symbol.start_line,
                 symbol.end_line
             ));
+            if let Some(props) = &symbol.properties {
+                for prop in props {
+                    output.push_str(&format!("  - {}\n", prop.name));
+                }
+            }
         }
         output
     }
