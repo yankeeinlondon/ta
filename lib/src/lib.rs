@@ -8,6 +8,7 @@ pub mod type_errors;
 pub mod symbols;
 pub mod dependencies;
 pub mod tests;
+pub mod watcher;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;
