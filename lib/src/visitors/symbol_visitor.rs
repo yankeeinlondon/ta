@@ -79,8 +79,9 @@ impl<'a> Visit<'a> for SymbolVisitor<'a> {
                      BindingPatternKind::BindingIdentifier(id) => id.name.to_string(),
                      _ => "complex_pattern".to_string(),
                  };
-                 let type_ann = param.pattern.type_annotation.as_ref().map(|_t| {
-                     "type".to_string() 
+                 let type_ann = param.pattern.type_annotation.as_ref().map(|t| {
+                     let span = t.span;
+                     self.source.get(span.start as usize..span.end as usize).unwrap_or("type").to_string()
                  });
                  params.push(ParameterInfo { name: param_name, type_annotation: type_ann });
             }
@@ -102,7 +103,10 @@ impl<'a> Visit<'a> for SymbolVisitor<'a> {
                         if let PropertyKey::StaticIdentifier(key) = &prop.key {
                              props.push(PropertyInfo {
                                  name: key.name.to_string(),
-                                 type_annotation: prop.type_annotation.as_ref().map(|_| "type".to_string()),
+                                 type_annotation: prop.type_annotation.as_ref().map(|t| {
+                                     let span = t.span;
+                                     self.source.get(span.start as usize..span.end as usize).unwrap_or("type").to_string()
+                                 }),
                              });
                         }
                     }
