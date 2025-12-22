@@ -3,8 +3,8 @@ use oxc_ast::visit::Visit;
 use crate::models::TypeTest;
 use crate::visitors::test_visitor::TestVisitor;
 
-pub fn extract_tests<'a>(
-    program: &Program<'a>,
+pub fn extract_tests(
+    program: &Program<'_>,
     file_path: String,
 ) -> Vec<TypeTest> {
     let mut visitor = TestVisitor::new(file_path);

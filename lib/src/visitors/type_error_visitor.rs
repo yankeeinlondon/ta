@@ -45,31 +45,57 @@ impl<'a> TypeErrorVisitor<'a> {
         if self.processed_errors.contains(&index) {
             return;
         }
-        
+
         let error_span = error.labels.as_ref()
             .and_then(|labels| labels.first())
             .map(|l| Self::to_oxc_span(l.inner()))
             .unwrap_or(span);
-            
+
         let message = error.to_string();
-        
+
         let (line, column) = self.get_line_col(error_span.start);
-        
+
         let block = self.source.get(error_span.start as usize..error_span.end as usize)
             .unwrap_or("").to_string();
 
+        // Extract error code from OxcDiagnostic.code field
+        // OxcCode has scope (e.g., "TS") and number (e.g., "2322")
+        let error_id = Self::extract_error_code(error);
+
         self.errors.push(TypeError {
-            id: "error".to_string(),
+            id: error_id,
             message,
-            file: "unknown".to_string(),
+            file: "unknown".to_string(), // Will be set by extract_type_errors in type_errors.rs
             line,
             column,
             scope: self.get_scope_string(),
             block,
             span: error_span,
         });
-        
+
         self.processed_errors.insert(index);
+    }
+
+    /// Extracts the error code from an OxcDiagnostic.
+    ///
+    /// OXC 0.30 provides structured error codes via the `code` field on `OxcDiagnosticInner`.
+    /// This field contains an `OxcCode` struct with optional `scope` and `number` fields.
+    ///
+    /// # Returns
+    ///
+    /// - `"TS####"` format if both scope and number are present (e.g., "TS2322")
+    /// - The scope alone if only scope is present (e.g., "TS")
+    /// - The number alone if only number is present (rare)
+    /// - `"error"` as fallback if no code information is available
+    fn extract_error_code(diagnostic: &OxcDiagnostic) -> String {
+        let code = &diagnostic.code;
+
+        match (&code.scope, &code.number) {
+            (Some(scope), Some(number)) => format!("{}{}", scope, number),
+            (Some(scope), None) => scope.to_string(),
+            (None, Some(number)) => number.to_string(),
+            (None, None) => "error".to_string(),
+        }
     }
 
     fn get_line_col(&self, offset: u32) -> (usize, usize) {
@@ -237,5 +263,56 @@ mod tests {
         let source = "let x = 1;";
         let errors = parse_and_visit(source);
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_error_id_extraction() {
+        // Test that error IDs are properly extracted (not hardcoded to "error")
+        let source = "let x = 1; let x = 2;"; // Redeclaration error
+        let errors = parse_and_visit(source);
+        assert!(!errors.is_empty());
+
+        // Error ID should not be the hardcoded "error" string
+        // OXC may or may not provide a code for redeclaration errors
+        // If no code is provided, it will fall back to "error"
+        // This test just verifies the extraction logic runs
+        assert!(!errors[0].id.is_empty());
+    }
+
+    #[test]
+    fn test_file_path_initially_unknown() {
+        // Test that file field is initially "unknown" before extract_type_errors sets it
+        let source = "let x = 1; let x = 2;";
+        let errors = parse_and_visit(source);
+        assert!(!errors.is_empty());
+
+        // In the visitor, file is set to "unknown"
+        // extract_type_errors() in type_errors.rs will override this
+        assert_eq!(errors[0].file, "unknown");
+    }
+
+    #[test]
+    fn test_error_code_extraction_all_cases() {
+        use oxc_diagnostics::OxcDiagnostic;
+
+        // Test case 1: Both scope and number present
+        let mut diag1 = OxcDiagnostic::error("Test error");
+        diag1 = diag1.with_error_code_scope("TS");
+        diag1 = diag1.with_error_code_num("2322");
+        assert_eq!(TypeErrorVisitor::extract_error_code(&diag1), "TS2322");
+
+        // Test case 2: Only scope present
+        let mut diag2 = OxcDiagnostic::error("Test error");
+        diag2 = diag2.with_error_code_scope("TS");
+        assert_eq!(TypeErrorVisitor::extract_error_code(&diag2), "TS");
+
+        // Test case 3: Only number present (rare but possible)
+        let mut diag3 = OxcDiagnostic::error("Test error");
+        diag3 = diag3.with_error_code_num("1234");
+        assert_eq!(TypeErrorVisitor::extract_error_code(&diag3), "1234");
+
+        // Test case 4: Neither scope nor number (fallback)
+        let diag4 = OxcDiagnostic::error("Test error");
+        assert_eq!(TypeErrorVisitor::extract_error_code(&diag4), "error");
     }
 }

@@ -1,9 +1,17 @@
 use oxc_ast::visit::{walk, Visit};
 use oxc_ast::ast::*;
 use std::path::PathBuf;
+use serde::Serialize;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ImportInfo {
+    pub source: String,
+    pub symbols: Vec<String>,
+}
 
 pub struct DependencyVisitor {
     pub dependencies: Vec<String>,
+    pub imports: Vec<ImportInfo>,
     pub current_file: PathBuf,
 }
 
@@ -11,6 +19,7 @@ impl DependencyVisitor {
     pub fn new(current_file: PathBuf) -> Self {
         Self {
             dependencies: Vec::new(),
+            imports: Vec::new(),
             current_file,
         }
     }
@@ -18,19 +27,69 @@ impl DependencyVisitor {
 
 impl<'a> Visit<'a> for DependencyVisitor {
     fn visit_import_declaration(&mut self, decl: &ImportDeclaration<'a>) {
-        self.dependencies.push(decl.source.value.to_string());
+        let source = decl.source.value.to_string();
+        self.dependencies.push(source.clone());
+
+        // Extract imported symbols
+        let mut symbols = Vec::new();
+
+        if let Some(specifiers) = &decl.specifiers {
+            for specifier in specifiers {
+                match specifier {
+                    ImportDeclarationSpecifier::ImportSpecifier(spec) => {
+                        // Named import: import { foo } from './bar'
+                        symbols.push(spec.local.name.to_string());
+                    }
+                    ImportDeclarationSpecifier::ImportDefaultSpecifier(spec) => {
+                        // Default import: import foo from './bar'
+                        symbols.push(spec.local.name.to_string());
+                    }
+                    ImportDeclarationSpecifier::ImportNamespaceSpecifier(spec) => {
+                        // Namespace import: import * as foo from './bar'
+                        symbols.push(format!("* as {}", spec.local.name));
+                    }
+                }
+            }
+        }
+
+        if !symbols.is_empty() {
+            self.imports.push(ImportInfo { source, symbols });
+        }
+
         walk::walk_import_declaration(self, decl);
     }
 
     fn visit_export_named_declaration(&mut self, decl: &ExportNamedDeclaration<'a>) {
         if let Some(source) = &decl.source {
-            self.dependencies.push(source.value.to_string());
+            let source_str = source.value.to_string();
+            self.dependencies.push(source_str.clone());
+
+            // Extract re-exported symbols
+            let mut symbols = Vec::new();
+            for spec in &decl.specifiers {
+                symbols.push(spec.local.name().to_string());
+            }
+
+            if !symbols.is_empty() {
+                self.imports.push(ImportInfo {
+                    source: source_str,
+                    symbols,
+                });
+            }
         }
         walk::walk_export_named_declaration(self, decl);
     }
 
     fn visit_export_all_declaration(&mut self, decl: &ExportAllDeclaration<'a>) {
-        self.dependencies.push(decl.source.value.to_string());
+        let source = decl.source.value.to_string();
+        self.dependencies.push(source.clone());
+
+        // Export * means all symbols
+        self.imports.push(ImportInfo {
+            source,
+            symbols: vec!["*".to_string()],
+        });
+
         walk::walk_export_all_declaration(self, decl);
     }
 }

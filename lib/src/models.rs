@@ -40,6 +40,79 @@ pub struct SymbolInfo {
     pub exported: bool,
     pub parameters: Option<Vec<ParameterInfo>>,
     pub properties: Option<Vec<PropertyInfo>>,
+    pub return_type: Option<String>,
+    pub jsdoc: Option<String>,
+}
+
+impl SymbolInfo {
+    /// Create a compact string representation of the symbol
+    /// Examples:
+    /// - function createContext(name: string): Context
+    /// - class UserApi
+    /// - interface User { id: number, name: string }
+    /// - type ApiResponse<T>
+    pub fn display_signature(&self) -> String {
+        match self.kind {
+            SymbolKind::Function => {
+                let params = if let Some(params) = &self.parameters {
+                    params.iter()
+                        .map(|p| {
+                            if let Some(ty) = &p.type_annotation {
+                                format!("{}: {}", p.name, ty)
+                            } else {
+                                p.name.clone()
+                            }
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                } else {
+                    String::new()
+                };
+
+                if let Some(ret) = &self.return_type {
+                    format!("function {}({}): {}", self.name, params, ret)
+                } else {
+                    format!("function {}({})", self.name, params)
+                }
+            }
+            SymbolKind::Class => {
+                format!("class {}", self.name)
+            }
+            SymbolKind::Interface => {
+                if let Some(props) = &self.properties {
+                    if props.is_empty() {
+                        format!("interface {}", self.name)
+                    } else {
+                        let prop_str = props.iter()
+                            .take(3) // Limit to first 3 properties
+                            .map(|p| {
+                                if let Some(ty) = &p.type_annotation {
+                                    format!("{}: {}", p.name, ty)
+                                } else {
+                                    p.name.clone()
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+
+                        let suffix = if props.len() > 3 { ", ..." } else { "" };
+                        format!("interface {} {{ {}{} }}", self.name, prop_str, suffix)
+                    }
+                } else {
+                    format!("interface {}", self.name)
+                }
+            }
+            SymbolKind::Type => {
+                format!("type {}", self.name)
+            }
+            SymbolKind::Variable => {
+                format!("variable {}", self.name)
+            }
+            SymbolKind::Enum => {
+                format!("enum {}", self.name)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -56,12 +129,14 @@ pub enum SymbolKind {
 pub struct ParameterInfo {
     pub name: String,
     pub type_annotation: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PropertyInfo {
     pub name: String,
     pub type_annotation: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

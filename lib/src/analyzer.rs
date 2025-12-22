@@ -8,7 +8,8 @@ use crate::models::{TypeError, SymbolInfo, TypeTest};
 use crate::{Error, Result};
 use crate::type_errors::extract_type_errors;
 use crate::symbols::extract_symbols;
-use crate::dependencies::extract_dependencies;
+use crate::dependencies::{extract_dependencies, extract_imports};
+use crate::visitors::dependency_visitor::ImportInfo;
 use crate::tests::extract_tests;
 
 #[derive(Default, Clone)]
@@ -19,11 +20,31 @@ pub struct AnalysisOptions {
     pub exported_only: bool,
 }
 
+#[derive(Debug, serde::Serialize)]
+pub struct FileDependency {
+    pub file: String,
+    pub imports: Vec<String>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct FileImports {
+    pub file: String,
+    pub imports: Vec<ImportInfo>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct SymbolDependency {
+    pub symbol: String,
+    pub source_file: String,
+    pub used_in: Vec<String>,
+}
+
 #[derive(Default, Debug, serde::Serialize)]
 pub struct AnalysisResult {
     pub type_errors: Vec<TypeError>,
     pub symbols: Vec<SymbolInfo>,
-    pub dependencies: Vec<String>,
+    pub dependencies: Vec<FileDependency>,
+    pub file_imports: Vec<FileImports>,
     pub tests: Vec<TypeTest>,
     pub total_files: usize,
 }
@@ -33,6 +54,7 @@ pub struct FileAnalysis {
     pub type_errors: Vec<TypeError>,
     pub symbols: Vec<SymbolInfo>,
     pub dependencies: Vec<String>,
+    pub imports: Vec<ImportInfo>,
     pub tests: Vec<TypeTest>,
 }
 
@@ -64,7 +86,23 @@ impl Analyzer {
         for file_analysis in file_analyses {
             result.type_errors.extend(file_analysis.type_errors);
             result.symbols.extend(file_analysis.symbols);
-            result.dependencies.extend(file_analysis.dependencies);
+
+            // Preserve file context for dependencies
+            if !file_analysis.dependencies.is_empty() {
+                result.dependencies.push(FileDependency {
+                    file: file_analysis.file_path.to_string_lossy().to_string(),
+                    imports: file_analysis.dependencies,
+                });
+            }
+
+            // Preserve imports with symbols
+            if !file_analysis.imports.is_empty() {
+                result.file_imports.push(FileImports {
+                    file: file_analysis.file_path.to_string_lossy().to_string(),
+                    imports: file_analysis.imports,
+                });
+            }
+
             result.tests.extend(file_analysis.tests);
         }
 
@@ -88,6 +126,7 @@ impl Analyzer {
         let type_errors = extract_type_errors(&source_code, &semantic, &diagnostics, &parse_ret.program, file_path_str.clone());
         let symbols = extract_symbols(&source_code, &parse_ret.program, file_path_str.clone(), self.options.exported_only);
         let dependencies = extract_dependencies(&parse_ret.program, path.to_path_buf());
+        let imports = extract_imports(&parse_ret.program, path.to_path_buf());
         let tests = extract_tests(&parse_ret.program, file_path_str);
 
         Ok(FileAnalysis {
@@ -95,6 +134,7 @@ impl Analyzer {
             type_errors,
             symbols,
             dependencies,
+            imports,
             tests,
         })
     }

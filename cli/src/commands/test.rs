@@ -1,15 +1,16 @@
 use clap::Parser;
-use color_eyre::eyre::{Result, Context};
+use color_eyre::eyre::{Result, Context, eyre};
 use ta_lib::analyzer::{Analyzer, AnalysisOptions};
 use ta_lib::output::OutputFormat;
 use ta_lib::models::TestStatus;
+use ignore::WalkBuilder;
 
 /// Detect type tests in source files
 #[derive(Parser, Debug)]
 pub struct TestArgs {
-    /// Glob pattern for test files
-    #[arg(default_value = "src/**/*.test.ts")]
-    pub pattern: String,
+    /// Optional filter(s) to match against test file paths (OR'd together)
+    #[arg(value_name = "FILTER")]
+    pub filters: Vec<String>,
 
     /// Only show failing tests
     #[arg(short, long)]
@@ -25,18 +26,46 @@ pub fn handle_test(args: TestArgs, format: OutputFormat) -> Result<()> {
     };
 
     let analyzer = Analyzer::new(options);
-    
+
+    // Use ignore crate to walk files, respecting .gitignore
+    let walker = WalkBuilder::new(".")
+        .standard_filters(true)  // Respects .gitignore, .ignore, etc.
+        .build();
+
     let mut files = Vec::new();
-    for entry in glob::glob(&args.pattern).wrap_err("Failed to read glob pattern")? {
-        let path = entry.wrap_err("Invalid glob entry")?;
-        if path.is_file() {
-            files.push(path);
+    for entry in walker {
+        let entry = entry.wrap_err("Failed to walk directory")?;
+
+        if let Some(file_type) = entry.file_type() {
+            if !file_type.is_file() {
+                continue;
+            }
+        }
+
+        let path = entry.path();
+        let path_str = path.to_string_lossy();
+
+        // Only include test files
+        if path_str.ends_with(".test.ts") ||
+           path_str.ends_with(".spec.ts") ||
+           path_str.ends_with(".test.tsx") ||
+           path_str.ends_with(".spec.tsx") {
+            files.push(path.to_path_buf());
         }
     }
 
+    // Apply user filters if provided (OR'd together)
+    // Multiple filters: ta test foo bar → files with "foo" OR "bar" in path
+    if !args.filters.is_empty() {
+        files.retain(|f| {
+            let path_str = f.to_string_lossy();
+            // Match if ANY filter is a substring of the path
+            args.filters.iter().any(|filter| path_str.contains(filter.as_str()))
+        });
+    }
+
     if files.is_empty() {
-        eprintln!("No test files found matching pattern: {}", args.pattern);
-        return Ok(());
+        return Err(eyre!("No test files found"));
     }
 
     eprintln!("Scanning {} files for tests...", files.len());
