@@ -107,7 +107,41 @@ This is NON-NEGOTIABLE. Reporting completion without filesystem verification is 
 
 ---
 
-## Step 0: Pre-Flight Checks
+## Step 0a: Detect Requested Skills
+
+**Purpose:** Identify which Claude Code skills the user wants to activate for plan execution.
+
+**Actions:**
+
+1. **Check user request for skill mentions:**
+   - Look for phrases like "use the [skill-name] skill"
+   - Look for skill activation requests in user's message
+   - Examples: "use rust-testing", "activate the clap skill", "with thiserror skill"
+
+2. **Parse skill list:**
+   - Extract skill names (e.g., `rust-testing`, `clap`, `thiserror`, `rust-logging`, `rust-devops`)
+   - Create a comma-separated list for passing to orchestrators and sub-agents
+
+3. **Communicate to user via STDOUT:**
+   ```text
+   🎯 Executing plan with skills: [skill1, skill2, skill3]
+
+   These skills will be passed to all phase orchestrators and sub-agents.
+   ```
+
+4. **If no skills requested:**
+   - Use default skill set based on project type
+   - For Rust projects: `rust-testing`, `thiserror`
+   - Communicate: "🎯 Using default skills for Rust: rust-testing, thiserror"
+
+5. **Store skills for orchestrator prompts:**
+   - Keep the skill list available for use in Step 3 (orchestrator prompts)
+   - Skills will be passed to each phase orchestrator
+   - Orchestrators will pass skills to their sub-agents
+
+---
+
+## Step 0b: Pre-Flight Checks
 
 Before executing a plan, verify the environment is ready:
 
@@ -203,6 +237,14 @@ Review the plan's parallelization section and create an execution order:
 
 For each execution group, spawn orchestrator agents. Use `run_in_background: true` for parallel execution.
 
+**Before launching each phase, communicate to user via STDOUT:**
+
+```text
+▶️  Phase [N]: [Phase Name]
+    Owner: [Principal Owner]
+    Skills: [skill-list-from-step-0a]
+```
+
 ### Orchestrator Agent Template
 
 For each phase, spawn an orchestrator using this pattern:
@@ -214,6 +256,26 @@ Task({
     model: "claude-sonnet-4-5-20250929",
     run_in_background: true,
     prompt: `You are the **Phase Orchestrator** for Phase [N]: [Phase Name].
+
+## MANDATORY: Skills Configuration
+
+**Skills to activate and pass to sub-agents:**
+[INSERT SKILLS FROM STEP 0a HERE - e.g., "rust-testing, thiserror, clap"]
+
+**Your responsibilities:**
+1. Activate these skills yourself at the start
+2. Pass these skills to ALL sub-agents you spawn
+3. Communicate skill activation to STDOUT
+
+**Output to STDOUT immediately:**
+\`\`\`
+🔧 Phase [N] Orchestrator - Activating skills: [skill-list]
+\`\`\`
+
+**For each skill:**
+- Search for and read \`.claude/skills/[skill-name]/SKILL.md\` or \`~/.claude/skills/[skill-name]/SKILL.md\`
+- Apply the skill's guidance throughout orchestration
+- Include skill activation instructions in ALL sub-agent prompts
 
 ## Your Role
 You coordinate the execution of this phase by spawning and managing specialized sub-agents. You are responsible for:
@@ -229,6 +291,7 @@ You coordinate the execution of this phase by spawning and managing specialized 
 - **Principal Owner:** [Rust Developer / Database Expert / Schema Architect]
 - **Dependencies:** [None / List of dependent phases that must be complete]
 - **Blast Radius:** [Test scope pattern from plan, or empty string for all tests]
+- **Skills to Use:** [skill-list-from-step-0a]
 
 ## Status Updates
 You MUST provide frequent status updates by outputting clear status messages:
@@ -410,6 +473,11 @@ Based on the phase deliverables, spawn sub-agents to do the work.
 
 2. **Spawn sub-agent using this pattern:**
 
+**Before spawning, output to STDOUT:**
+\`\`\`
+  └─ Spawning [Sub-Agent Type] with skills: [skill-list]
+\`\`\`
+
 \`\`\`typescript
 Task({
     subagent_type: "general-purpose",
@@ -417,6 +485,23 @@ Task({
     model: "claude-sonnet-4-5-20250929",
     run_in_background: [true if can parallelize, false if sequential],
     prompt: \`You are the [Sub-Agent Type] sub-agent working on Phase [N].
+
+## MANDATORY: Activate Skills FIRST
+
+**Skills to activate:**
+[INSERT SKILLS FROM ORCHESTRATOR - passed from Step 0a]
+
+**How to activate:**
+Before any other work, explicitly activate each skill:
+- For each skill in the list above, search for and read the skill file
+- Skills are located in \\\`.claude/skills/[skill-name]/SKILL.md\\\` or \\\`~/.claude/skills/[skill-name]/SKILL.md\\\`
+- Read the SKILL.md file to load the expertise
+- Apply the skill's guidance throughout your implementation
+
+**After activating skills, output to STDOUT:**
+\\\`\\\`\\\`
+✅ [Sub-Agent Type] activated skills: [list of skills successfully loaded]
+\\\`\\\`\\\`
 
 ## Context
 Read your expertise guidelines in: .claude/agents/[sub-agent-file].md
@@ -637,7 +722,23 @@ Execute the phase now and report back with your summary.`
 
 ### Launching Parallel Phases
 
-When phases can run in parallel, launch ALL orchestrators in a SINGLE message:
+When phases can run in parallel, launch ALL orchestrators in a SINGLE message.
+
+**Before launching, communicate to user via STDOUT:**
+
+```text
+🚀 Launching parallel execution group:
+
+▶️  Phase 1: [Phase Name]
+    Owner: [Owner]
+    Skills: [skill-list]
+
+▶️  Phase 2: [Phase Name]
+    Owner: [Owner]
+    Skills: [skill-list]
+
+All orchestrators will activate skills and pass them to their sub-agents.
+```
 
 ```typescript
 // Launch Group A phases in parallel

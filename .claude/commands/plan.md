@@ -51,6 +51,38 @@ Before starting:
 
 ---
 
+## Step 0: Detect Requested Skills
+
+**Purpose:** Identify which Claude Code skills the user wants to activate for this planning session.
+
+**Actions:**
+
+1. **Check user request for skill mentions:**
+   - Look for phrases like "use the [skill-name] skill"
+   - Look for skill activation requests in user's message
+   - Examples: "use rust-testing", "activate the clap skill", "with thiserror skill"
+
+2. **Parse skill list:**
+   - Extract skill names (e.g., `rust-testing`, `clap`, `thiserror`, `rust-logging`)
+   - Create a comma-separated list for passing to sub-agents
+
+3. **Communicate to user via STDOUT:**
+   ```text
+   📋 Planning with skills: [skill1, skill2, skill3]
+
+   These skills will be activated for all sub-agents during plan review.
+   ```
+
+4. **If no skills requested:**
+   - Use default skill set based on project type
+   - For Rust projects: `rust-testing`, `thiserror`
+   - Communicate: "📋 Using default skills for Rust: rust-testing, thiserror"
+
+5. **Store skills for sub-agent prompts:**
+   - Keep the skill list available for use in Step 3 (review prompts)
+
+---
+
 ## Step 1: Requirements Gathering
 
 ### 1.1 Understand the Task
@@ -309,6 +341,11 @@ For each sub-agent with assigned ownership, create a review task:
 
 **Rust Developer Review:**
 
+**Before launching, communicate to user via STDOUT:**
+```text
+🔧 Rust Developer Review - Activating skills: [skill-list-from-step-0]
+```
+
 ```typescript
 Task({
     subagent_type: "general-purpose",
@@ -317,13 +354,22 @@ Task({
     run_in_background: true,
     prompt: `You are the Rust Developer sub-agent reviewing a plan for the TA (TypeScript Analyzer) project.
 
-## First: Activate Skills
-Activate relevant Rust skills based on task type:
-- \`rust-testing\` - For testing-related work
-- \`rust-logging\` - For logging/observability
-- \`rust-devops\` - For builds/deployment
-- \`thiserror\` - For error handling
-- \`clap\` - For CLI work
+## MANDATORY: Activate Requested Skills FIRST
+
+**User-requested skills to activate:**
+[INSERT SKILLS FROM STEP 0 HERE - e.g., "rust-testing, thiserror, clap"]
+
+**How to activate:**
+Before proceeding with the review, explicitly activate each skill:
+- For each skill in the list above, search for and read the skill file
+- Skills are located in \`.claude/skills/[skill-name]/SKILL.md\` or \`~/.claude/skills/[skill-name]/SKILL.md\`
+- Read the SKILL.md file to load the expertise
+- Apply the skill's guidance throughout your review
+
+**After activating skills, output to STDOUT:**
+\`\`\`
+✅ Activated skills: [list of skills successfully loaded]
+\`\`\`
 
 ## Context
 Read your expertise guidelines in: .claude/agents/rust-developer.md
@@ -409,6 +455,11 @@ Return your review as:
 
 **Feature Tester Review (Rust):**
 
+**Before launching, communicate to user via STDOUT:**
+```text
+🧪 Feature Tester (Rust) Review - Activating skills: [skill-list-from-step-0]
+```
+
 ```typescript
 Task({
     subagent_type: "general-purpose",
@@ -417,8 +468,22 @@ Task({
     run_in_background: true,
     prompt: `You are the Feature Tester (Rust) sub-agent reviewing a plan for the TA (TypeScript Analyzer) project.
 
-## First: Activate Skills
-Activate the \`rust-testing\` skill before proceeding with the review.
+## MANDATORY: Activate Requested Skills FIRST
+
+**User-requested skills to activate:**
+[INSERT SKILLS FROM STEP 0 HERE - e.g., "rust-testing, proptest"]
+
+**How to activate:**
+Before proceeding with the review, explicitly activate each skill:
+- For each skill in the list above, search for and read the skill file
+- Skills are located in \`.claude/skills/[skill-name]/SKILL.md\` or \`~/.claude/skills/[skill-name]/SKILL.md\`
+- Read the SKILL.md file to load the expertise
+- Apply the skill's guidance throughout your review
+
+**After activating skills, output to STDOUT:**
+\`\`\`
+✅ Activated skills: [list of skills successfully loaded]
+\`\`\`
 
 ## Context
 Read your expertise guidelines in: .claude/agents/feature-tester-rust.md
@@ -510,6 +575,20 @@ Return your review as:
 **IMPORTANT:** Send ALL relevant Task calls in a SINGLE message to run them in parallel.
 
 Only invoke sub-agents that have assigned ownership in the plan.
+
+**Before launching, communicate the complete skill strategy to user via STDOUT:**
+
+```text
+🚀 Launching parallel reviews with skill configuration:
+
+**Rust Developer Review:**
+  Skills: [skill-list-from-step-0]
+
+**Feature Tester (Rust) Review:**
+  Skills: [skill-list-from-step-0]
+
+All sub-agents will activate these skills before beginning their reviews.
+```
 
 Example parallel invocation:
 

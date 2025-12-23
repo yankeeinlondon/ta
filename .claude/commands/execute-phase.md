@@ -15,6 +15,56 @@ Before starting, ensure:
 2. You know which phase to execute
 3. All previous phases are complete (if applicable)
 
+---
+
+## Step 0: Detect Requested Skills
+
+**Purpose:** Identify which Claude Code skills the user wants to activate for this phase execution.
+
+**Actions:**
+
+1. **Check user request for skill mentions:**
+   - Look for phrases like "use the [skill-name] skill"
+   - Look for skill activation requests in user's message
+   - Examples: "use rust-testing", "activate the clap skill", "with thiserror skill"
+
+2. **Parse skill list:**
+   - Extract skill names (e.g., `rust-testing`, `clap`, `thiserror`, `rust-logging`, `proptest`)
+   - Create a comma-separated list for use during implementation
+
+3. **Communicate to user via STDOUT:**
+   ```text
+   🎯 Executing phase with skills: [skill1, skill2, skill3]
+
+   These skills will guide implementation and testing.
+   ```
+
+4. **If no skills requested:**
+   - Use default skill set based on project type
+   - For Rust projects: `rust-testing`, `thiserror`
+   - Communicate: "🎯 Using default skills for Rust: rust-testing, thiserror"
+
+5. **Store skills for activation:**
+   - Keep the skill list available for activation before starting work
+   - Skills will be activated in Step 1.5 (before exploration) or Step 2 (for design phases)
+
+6. **Activate skills immediately:**
+   ```text
+   📚 Activating skills...
+   ```
+
+   For each skill in the list:
+   - Search for `.claude/skills/[skill-name]/SKILL.md` or `~/.claude/skills/[skill-name]/SKILL.md`
+   - Read the SKILL.md file to load the expertise
+   - Apply the skill's guidance throughout the phase
+
+   After activation:
+   ```text
+   ✅ Skills activated: [list of skills successfully loaded]
+   ```
+
+---
+
 ## Step 1: Identify the Phase
 
 Ask the user:
@@ -93,6 +143,8 @@ Ask the user:
 
 **Purpose:** Understand current state before making design decisions.
 
+**Note:** At this point, skills from Step 0 have already been activated. Use their guidance for architecture exploration.
+
 **Actions:**
 
 1. **Identify relevant files:**
@@ -125,6 +177,13 @@ Ask the user:
 ## Step 3: Complete Design Work
 
 **Purpose:** Create design artifacts (documentation, ADRs, schemas, API specs).
+
+**Note:** Use activated skills (from Step 0) to guide design decisions. Skills inform patterns and best practices.
+
+**Communicate to user via STDOUT before design work:**
+```text
+📐 Creating design with guidance from skills: [skill-list-from-step-0]
+```
 
 **Actions:**
 
@@ -292,6 +351,8 @@ Ask the user:
 
 **Purpose:** Prevent architectural misunderstandings by examining existing code structure BEFORE implementation.
 
+**Note:** At this point, skills from Step 0 have already been activated. Use their guidance throughout exploration.
+
 **Actions:**
 
 1. **Identify files mentioned in the plan:**
@@ -457,6 +518,13 @@ Ask the user:
 
 **🚨 CRITICAL: This is TRUE Test-Driven Development - tests MUST be written BEFORE implementation! 🚨**
 
+**Note:** Use activated skills (from Step 0) to guide test creation. If `rust-testing` is active, follow its patterns.
+
+**Communicate to user via STDOUT before writing tests:**
+```text
+🧪 Writing tests with guidance from skills: [skill-list-from-step-0]
+```
+
 **Actions:**
 
 1. **Review test requirements from plan:**
@@ -598,6 +666,13 @@ Testing mistakes caught here save hours of debugging and rework later.
 ## Step 5: IMPLEMENTATION - Build to Pass Tests
 
 **Purpose:** Let tests drive the implementation, ensuring you build exactly what's needed.
+
+**Note:** Use activated skills (from Step 0) to guide implementation. Apply skill patterns throughout.
+
+**Communicate to user via STDOUT before implementation:**
+```text
+⚙️  Implementing with guidance from skills: [skill-list-from-step-0]
+```
 
 **Actions:**
 
@@ -774,10 +849,12 @@ Testing mistakes caught here save hours of debugging and rework later.
 
 ## Important Reminders
 
+- **Skills activation** - Skills are activated in Step 0 and guide ALL subsequent steps
 - **Detect phase type** - Design phases follow different workflow than implementation phases
 - **Design phases** - Create design artifacts (ADRs, schemas, docs); no tests required
 - **Implementation phases** - Follow TDD workflow with tests first
 - **Tests FIRST** - Always write tests before implementation (implementation phases only)
+- **Use activated skills** - Apply skill patterns in exploration, testing, implementation, and design
 - **Log everything** - Keep the log file updated throughout
 - **Understand failures** - Don't just fix symptoms, understand root causes
 - **Blast radius testing** - Run tests within blast radius, not necessarily entire suite
@@ -793,6 +870,8 @@ Use this checklist to ensure you don't miss any steps:
 
 ### Common Steps (All Phases)
 
+- [ ] **Skills detected and activated** (Step 0)
+- [ ] Skills communicated to user via STDOUT
 - [ ] Plan and phase identified
 - [ ] **Phase type detected** (DESIGN vs IMPLEMENTATION)
 - [ ] LOG created in `.ai/logs/`

@@ -1,4 +1,5 @@
-#!/usr/bin/env bun
+#!/bin/sh
+//bin/true; SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"; exec "$SCRIPT_DIR/node_modules/.bin/bun" "$0" "$@"
 
 /**
  * Review → Plan → Execute workflow
@@ -50,7 +51,7 @@ async function executeClaudeCommand(command: string): Promise<void> {
   const exitCode = await proc.exited;
 
   if (exitCode !== 0) {
-    throw new Error(`Command failed with exit code ${exitCode}`);
+    throw new Error(`Claude command failed with exit code ${exitCode}: ${command}`);
   }
 }
 
@@ -83,16 +84,27 @@ function capitalizeWords(text: string): string {
 }
 
 /**
+ * Validate scope value
+ */
+function validateScope(scope: string): boolean {
+  const validScopes = ['must fix', 'suggested improvements', 'all suggestions'];
+  return validScopes.includes(scope.toLowerCase());
+}
+
+/**
  * Prompt user for confirmation
  */
 async function confirm(message: string): Promise<boolean> {
   process.stderr.write(`\n${message} (y/n): `);
 
-  // Read from stdin
-  const n = await Bun.stdin.stream().getReader().read();
+  // Read from /dev/tty instead of stdin to work when stdin is piped
+  const tty = Bun.file('/dev/tty');
+  const reader = tty.stream().getReader();
+  const result = await reader.read();
+  reader.releaseLock();
 
-  if (n.value) {
-    const answer = new TextDecoder().decode(n.value).trim().toLowerCase();
+  if (result.value) {
+    const answer = new TextDecoder().decode(result.value).trim().toLowerCase();
     return answer === 'y' || answer === 'yes';
   }
 
@@ -127,7 +139,7 @@ async function findNewestPlanFile(): Promise<string | null> {
 
     return filesWithStats && filesWithStats[0] ? filesWithStats[0].path : null;
   } catch (error) {
-    console.error('Error finding plan file:', error);
+    console.error('Error scanning .ai/plans/ directory:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -135,15 +147,15 @@ async function findNewestPlanFile(): Promise<string | null> {
 /**
  * Main workflow
  */
-async function main() {
+async function main(): Promise<void> {
   try {
     // Parse command line args: bun script.ts [scope]
-    const args = Bun.argv.slice(2); // Remove 'bun' and script path
-    let scopeArg = args[0];
+    const args: string[] = Bun.argv.slice(2); // Remove 'bun' and script path
+    const scopeArg: string | undefined = args[0];
 
     // Read review filename from STDIN
-    const stdin = await Bun.stdin.text();
-    const reviewFile = stdin.trim();
+    const stdin: string = await Bun.stdin.text();
+    const reviewFile: string = stdin.trim();
 
     if (!reviewFile) {
       console.error('Error: No review file provided via STDIN');
@@ -152,12 +164,24 @@ async function main() {
       process.exit(1);
     }
 
-    const reviewPath = resolve(reviewFile);
+    const reviewPath: string = resolve(reviewFile);
     console.error(`Review file: ${reviewPath}\n`);
 
+    // Validate review file exists
+    const reviewFileHandle: ReturnType<typeof Bun.file> = Bun.file(reviewPath);
+    if (!(await reviewFileHandle.exists())) {
+      console.error(`Error: Review file not found: ${reviewPath}`);
+      process.exit(1);
+    }
+
     // Read review content to extract available sections
-    const reviewContent = await Bun.file(reviewPath).text();
-    const headings = extractL2Headings(reviewContent);
+    const reviewContent: string = await reviewFileHandle.text();
+    const headings: string[] = extractL2Headings(reviewContent);
+
+    if (headings.length === 0) {
+      console.error('Warning: No L2 headings (##) found in review file');
+      console.error('Review file may be empty or improperly formatted\n');
+    }
 
     // Determine scope
     let scope: string;
@@ -171,7 +195,7 @@ async function main() {
       console.error('  - "suggested improvements" - Address only suggestions');
       console.error('  - "all suggestions" - Address all issues (default)');
 
-      const confirmed = await confirm('Proceed with "All Suggestions" scope?');
+      const confirmed: boolean = await confirm('Proceed with "All Suggestions" scope?');
 
       if (!confirmed) {
         console.error('\nAborted by user');
@@ -182,19 +206,27 @@ async function main() {
     } else {
       // Capitalize user input
       scope = capitalizeWords(scopeArg);
+
+      // Validate scope
+      if (!validateScope(scope)) {
+        console.error(`Warning: Unrecognized scope "${scope}"`);
+        console.error('Valid scopes: "must fix", "suggested improvements", "all suggestions"');
+        console.error('Proceeding anyway...\n');
+      }
     }
 
     console.error(`\nScope: ${scope}\n`);
 
     // Step 1: Create plan using /plan command with directive
-    const planPrompt = `/plan Fix "${scope}" issues from ${reviewPath}`;
+    const planPrompt: string = `/plan Fix "${scope}" issues from ${reviewPath}`;
     await executeClaudeCommand(planPrompt);
 
     // Step 2: Find the newest plan file
-    const planFile = await findNewestPlanFile();
+    const planFile: string | null = await findNewestPlanFile();
 
     if (!planFile) {
-      console.error('\n❌ Failed to find plan file in .ai/plans/');
+      console.error('\n❌ No plan file created in .ai/plans/');
+      console.error('The /plan command may have failed or no .ai/plans/ directory exists');
       process.exit(1);
     }
 

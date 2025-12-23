@@ -44,6 +44,7 @@ test *args="":
     @echo ""
     @cargo test {{args}}
 
+# uses Claude Code to convert a review into a plan, then execute the plan
 review-plan-execute review_file scope="":
     @echo ""
     @echo "Review → Plan → Execute Workflow"
