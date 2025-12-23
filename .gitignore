@@ -58,3 +58,5 @@ trace/*
 
 **/target/*
 target/**/*
+
+.ai 

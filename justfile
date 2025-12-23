@@ -43,3 +43,10 @@ test *args="":
     @echo "--------------------"
     @echo ""
     @cargo test {{args}}
+
+review-plan-execute review_file scope="":
+    @echo ""
+    @echo "Review → Plan → Execute Workflow"
+    @echo "---------------------------------"
+    @echo ""
+    @echo "{{review_file}}" | bun scripts/review-plan-execute.ts {{scope}}
