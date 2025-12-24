@@ -93,10 +93,13 @@ pub fn handle_deps(args: DepsArgs, format: OutputFormat) -> Result<()> {
             let is_external = !import_info.source.starts_with('.');
 
             // Apply external_only filter
+            // Skip local imports if external_only is true
+            // Skip external imports if external_only is false
             if args.external_only && !is_external {
-                continue;
-            } else if !args.external_only && is_external {
-                continue;
+                continue;  // Want external only, this is local
+            }
+            if !args.external_only && is_external {
+                continue;  // Want local only, this is external
             }
 
             // Resolve the source file path

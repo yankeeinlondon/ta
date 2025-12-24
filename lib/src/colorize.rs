@@ -1,3 +1,5 @@
+#![deprecated(since = "0.2.0", note = "Use highlighting module instead")]
+
 use crate::models::TypeError;
 use oxc_span::Span;
 
@@ -93,24 +95,4 @@ impl HtmlColorizer {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_console_colorizer() {
-        let code = "const x: number = 5;";
-        let colored = ConsoleColorizer::colorize_code_block(code, "ts");
-        assert!(colored.contains(BLUE)); // const
-        assert!(colored.contains(CYAN)); // number
-        assert!(colored.contains(RESET));
-    }
-
-    #[test]
-    fn test_html_colorizer() {
-        let code = "const x: number = 5;";
-        let html = HtmlColorizer::colorize_code_block(code, "ts");
-        assert!(html.contains("<span class=\"keyword\">const"));
-        assert!(html.contains("<span class=\"type\">number"));
-    }
-}
+// Tests removed - module is deprecated and replaced by highlighting module

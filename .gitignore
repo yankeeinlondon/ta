@@ -59,4 +59,9 @@ trace/*
 **/target/*
 target/**/*
 
-.ai 
+
+.ai/logs
+.ai/prompts
+.ai/reviews
+.ai/plans/archive
+.ai/features/archive

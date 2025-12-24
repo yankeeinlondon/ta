@@ -51,3 +51,8 @@ review-plan-execute review_file scope="":
     @echo "---------------------------------"
     @echo ""
     @echo "{{review_file}}" | bun scripts/review-plan-execute.ts {{scope}}
+
+# install the `ta` binary into the executable path
+install:
+    @cargo build --release
+    @cargo install --path ./cli --locked

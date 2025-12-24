@@ -3,6 +3,7 @@
         "debouncer",
         "insta",
         "miette",
-        "proptest"
+        "proptest",
+        "syntect"
     ]
 }

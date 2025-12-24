@@ -23,6 +23,7 @@ impl<'a> SymbolVisitor<'a> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_symbol(
         &mut self,
         name: String,
@@ -246,25 +247,22 @@ impl<'a> Visit<'a> for SymbolVisitor<'a> {
         // Extract interface properties
         let mut props = Vec::new();
         for element in &decl.body.body {
-            match element {
-                TSSignature::TSPropertySignature(prop) => {
-                    if let PropertyKey::StaticIdentifier(key) = &prop.key {
-                        let type_ann = prop.type_annotation.as_ref().map(|t| {
-                            let span = t.span;
-                            self.source.get(span.start as usize..span.end as usize)
-                                .unwrap_or("type")
-                                .trim_start_matches(':')
-                                .trim()
-                                .to_string()
-                        });
-                        props.push(PropertyInfo {
-                            name: key.name.to_string(),
-                            type_annotation: type_ann,
-                            description: None,
-                        });
-                    }
+            if let TSSignature::TSPropertySignature(prop) = element {
+                if let PropertyKey::StaticIdentifier(key) = &prop.key {
+                    let type_ann = prop.type_annotation.as_ref().map(|t| {
+                        let span = t.span;
+                        self.source.get(span.start as usize..span.end as usize)
+                            .unwrap_or("type")
+                            .trim_start_matches(':')
+                            .trim()
+                            .to_string()
+                    });
+                    props.push(PropertyInfo {
+                        name: key.name.to_string(),
+                        type_annotation: type_ann,
+                        description: None,
+                    });
                 }
-                _ => {}
             }
         }
 

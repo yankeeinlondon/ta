@@ -9,9 +9,19 @@ pub struct TypeError {
     pub line: usize,
     pub column: usize,
     pub scope: String,  // "file::symbol" format
-    pub block: String,  // Plain text code block
+    pub block: String,  // Plain text code block (legacy - kept for backward compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_code: Option<SourceCode>,  // New field - context-aware code extraction
     #[serde(serialize_with = "span_serializer::serialize")]
     pub span: Span,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SourceCode {
+    pub full_code: String,
+    pub display_code: String,
+    pub scope_type: crate::highlighting::ScopeType,
+    pub scope_name: String,
 }
 
 mod span_serializer {
@@ -199,6 +209,7 @@ mod tests {
             column: 5,
             scope: "main".to_string(),
             block: "const x: number = 'hello';".to_string(),
+            source_code: None,
             span: Span::new(0, 10),
         };
 
@@ -207,5 +218,7 @@ mod tests {
         assert!(json.contains("src/main.ts"));
         assert!(json.contains("\"start\":0"));
         assert!(json.contains("\"end\":10"));
+        // source_code is None, should be skipped in serialization
+        assert!(!json.contains("source_code"));
     }
 }

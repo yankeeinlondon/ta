@@ -36,6 +36,18 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     pub verbose: bool,
 
+    /// Theme to use for syntax highlighting
+    #[arg(long, global = true, env = "TA_THEME")]
+    pub theme: Option<String>,
+
+    /// Theme to use for light mode (overrides --theme)
+    #[arg(long, global = true, env = "TA_LIGHT_THEME")]
+    pub light_theme: Option<String>,
+
+    /// Theme to use for dark mode (overrides --theme)
+    #[arg(long, global = true, env = "TA_DARK_THEME")]
+    pub dark_theme: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -54,6 +66,8 @@ pub enum Commands {
     Deps(DepsArgs),
     /// Watch for file changes and run analysis
     Watch(WatchArgs),
+    /// List available syntax highlighting themes
+    ListThemes,
 }
 
 fn setup_colors() {
@@ -93,22 +107,35 @@ fn main() -> Result<()> {
     };
 
     match cli.command {
-        Commands::Source(args) => handle_source(args, format)?,
+        Commands::Source(args) => handle_source(args, format, cli.verbose)?,
         Commands::Symbols(args) => handle_symbols(args, format)?,
         Commands::Test(args) => handle_test(args, format)?,
         Commands::File(args) => handle_file(args, format)?,
         Commands::Deps(args) => handle_deps(args, format)?,
         Commands::Watch(args) => handle_watch(args, format)?,
+        Commands::ListThemes => {
+            let themes = ta_lib::highlighting::themes::list_available_themes();
+            println!("Available themes:");
+            for theme in themes {
+                println!("  {}", theme);
+            }
+        }
     }
 
     Ok(())
 }
 
-fn setup_logging(verbose: bool) {
-    let log_level = if verbose { "debug" } else { "info" };
+fn setup_logging(_verbose: bool) {
+    // Only enable debug logging when DEBUG environment variable is set
+    // This prevents -v flag from triggering debug logs
+    let default_level = if std::env::var("DEBUG").is_ok() {
+        "debug"
+    } else {
+        "info"
+    };
 
     env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(log_level)
+        env_logger::Env::default().default_filter_or(default_level)
     )
     .format_timestamp(None)
     .format_target(false)

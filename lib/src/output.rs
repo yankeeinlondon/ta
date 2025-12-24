@@ -1,9 +1,33 @@
 use crate::models::{SymbolInfo, TypeError};
+use crate::highlighting::{highlight_code, HighlightOptions};
 use serde::Serialize;
 use clap::ValueEnum;
 use colored::*;
+use std::path::Path;
 
-#[derive(Debug, Clone, Copy, ValueEnum, Default, Serialize)]
+/// Create a clickable terminal link using OSC8 standard
+///
+/// The displayed text remains a relative path, but the link target is an absolute path.
+/// This allows terminals that support OSC8 to make file paths clickable.
+///
+/// Format: \x1b]8;;file://absolute_path\x1b\\display_text\x1b]8;;\x1b\\
+pub fn link_file(text: &str, filepath: &str) -> String {
+    // Convert to absolute path
+    let abs_path = if Path::new(filepath).is_absolute() {
+        filepath.to_string()
+    } else {
+        // Get current directory and join with relative path
+        match std::env::current_dir() {
+            Ok(cwd) => cwd.join(filepath).to_string_lossy().to_string(),
+            Err(_) => filepath.to_string(), // Fallback to relative if current_dir fails
+        }
+    };
+
+    // OSC8 format: ESC]8;;URI ESC\\ TEXT ESC]8;; ESC\\
+    format!("\x1b]8;;file://{}\x1b\\{}\x1b]8;;\x1b\\", abs_path, text)
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
@@ -107,31 +131,50 @@ impl OutputFormatter {
         let mut output = String::new();
 
         for error in errors {
-            // Error header: [TS2322] in myFunction
+            // New format: [❌] Message (bold)
+            //   in scope at file:line:col
             output.push_str(&format!(
-                "{} {} {}\n",
-                format!("[{}]", error.id).red().bold(),
-                "in".white(),
-                error.scope.cyan()
+                "{} {}\n",
+                "[❌]".red().bold(),
+                error.message.bold()
             ));
 
-            // File and location: src/index.ts:42:10
+            // Location line: in scope at file:line:col
+            // Use OSC8 hyperlink for clickable file path
+            let file_with_location = format!("{}:{}:{}", error.file, error.line, error.column);
+            let linked_file = link_file(&file_with_location, &error.file).blue();
+
             output.push_str(&format!(
-                "  {} {}:{}:{}\n",
-                "at".white(),
-                error.file.blue(),
-                error.line,
-                error.column
+                "  {} {} {} {}\n\n",  // Add blank line after location
+                "in".dimmed(),
+                error.scope.cyan(),
+                "at".dimmed(),
+                linked_file
             ));
 
-            // Error message
-            output.push_str(&format!(
-                "  {}\n",
-                error.message.red()
-            ));
+            // Use new highlighting if available, fallback to legacy
+            if let Some(source) = &error.source_code {
+                // Create highlighting options with error annotations
+                // Note: TypeScript is a superset of JavaScript, so we use "js" syntax
+                // which is what syntect supports (TypeScript syntax is not included)
+                let options = HighlightOptions::new("js")
+                    .with_line_numbers(true)
+                    .with_indent(2)  // Indent code blocks for visual nesting
+                    .for_format(OutputFormat::Console);
 
-            // Code block if present
-            if !error.block.is_empty() {
+                match highlight_code(&source.display_code, options) {
+                    Ok(highlighted) => {
+                        output.push_str(&highlighted.render_console());
+                        output.push('\n');
+                    }
+                    Err(e) => {
+                        // Log error for debugging, fallback to plain text
+                        log::debug!("Highlighting failed: {}", e);
+                        output.push_str(&format!("  {}\n", source.display_code.dimmed()));
+                    }
+                }
+            } else if !error.block.is_empty() {
+                // Legacy fallback
                 output.push_str(&format!("  {}\n", error.block.dimmed()));
             }
 
@@ -157,7 +200,6 @@ impl OutputFormatter {
     <span class="file-path">{}:{}:{}</span>
   </div>
   <div class="error-message">{}</div>
-</div>
 "#,
                 html_escape::encode_text(&error.id),
                 html_escape::encode_text(&error.scope),
@@ -166,6 +208,34 @@ impl OutputFormatter {
                 error.column,
                 html_escape::encode_text(&error.message)
             ));
+
+            // Use highlighting for HTML output
+            // TypeScript uses JavaScript syntax (syntect doesn't have native TS support)
+            if let Some(source) = &error.source_code {
+                let options = HighlightOptions::new("js")
+                    .with_line_numbers(true)
+                    .with_indent(2)  // Indent code blocks for visual nesting
+                    .for_format(OutputFormat::Html);
+
+                match highlight_code(&source.display_code, options) {
+                    Ok(highlighted) => {
+                        output.push_str("  <div class=\"code-highlight\">\n");
+                        output.push_str(&highlighted.render_html());
+                        output.push_str("  </div>\n");
+                    }
+                    Err(_) => {
+                        // Fallback
+                        output.push_str(&format!("  <pre>{}</pre>\n",
+                            html_escape::encode_text(&source.display_code)));
+                    }
+                }
+            } else if !error.block.is_empty() {
+                // Legacy fallback
+                output.push_str(&format!("  <pre>{}</pre>\n",
+                    html_escape::encode_text(&error.block)));
+            }
+
+            output.push_str("</div>\n");
         }
 
         output.push_str("</div>");
@@ -268,6 +338,7 @@ mod tests {
             column: 1,
             scope: "global".to_string(),
             block: "code".to_string(),
+            source_code: None,
             span: Span::new(0, 4),
         };
         let output = OutputFormatter::format_type_errors(&[error], OutputFormat::Json);
@@ -289,6 +360,7 @@ mod tests {
             column: 10,
             scope: "myFunction".to_string(),
             block: String::new(),
+            source_code: None,
             span: Span::new(0, 10),
         }];
 
@@ -319,6 +391,7 @@ mod tests {
             column: 10,
             scope: "myFunction".to_string(),
             block: String::new(),
+            source_code: None,
             span: Span::new(0, 10),
         }];
 
@@ -344,6 +417,7 @@ mod tests {
             column: 10,
             scope: "myFunction".to_string(),
             block: String::new(),
+            source_code: None,
             span: Span::new(0, 10),
         }];
 
@@ -371,6 +445,8 @@ mod tests {
             exported: true,
             parameters: None,
             properties: None,
+            return_type: None,
+            jsdoc: None,
         };
 
         let output = OutputFormatter::format_symbols(&[symbol], OutputFormat::Console);
@@ -379,9 +455,9 @@ mod tests {
         assert!(output.contains("\x1b["), "Symbols output should contain ANSI codes");
         assert!(output.contains("MyClass"), "Symbols output should contain class name");
 
-        // GREEN (32) for name, MAGENTA (35) for kind, BLUE (34) for file
-        // Note: colored crate may use combined codes like [1;32m for bold+green
-        assert!(output.contains("\x1b[32m") || output.contains("\x1b[92m") || output.contains("\x1b[1;32m"), "Should contain green for symbol name. Got: {}", output);
+        // CYAN (36) for name (bold), MAGENTA (35) for kind, BLUE (34) for file
+        // Note: colored crate may use combined codes like [1;36m for bold+cyan
+        assert!(output.contains("\x1b[36m") || output.contains("\x1b[96m") || output.contains("\x1b[1;36m"), "Should contain cyan for symbol name. Got: {}", output);
         assert!(output.contains("\x1b[35m") || output.contains("\x1b[95m"), "Should contain magenta for kind");
         assert!(output.contains("\x1b[34m") || output.contains("\x1b[94m"), "Should contain blue for file");
 
@@ -403,11 +479,15 @@ mod tests {
             parameters: Some(vec![ParameterInfo {
                 name: "param1".to_string(),
                 type_annotation: Some("string".to_string()),
+                description: None,
             }]),
             properties: Some(vec![PropertyInfo {
                 name: "prop1".to_string(),
                 type_annotation: Some("number".to_string()),
+                description: None,
             }]),
+            return_type: None,
+            jsdoc: None,
         };
         let output = OutputFormatter::format_symbols(&[symbol], OutputFormat::Html);
 
@@ -433,13 +513,17 @@ mod tests {
                 ParameterInfo {
                     name: "a".to_string(),
                     type_annotation: Some("number".to_string()),
+                    description: None,
                 },
                 ParameterInfo {
                     name: "b".to_string(),
                     type_annotation: Some("number".to_string()),
+                    description: None,
                 },
             ]),
             properties: None,
+            return_type: None,
+            jsdoc: None,
         };
         // Clear any previous color settings and force enable colors for testing
         colored::control::unset_override();

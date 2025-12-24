@@ -9,6 +9,7 @@ pub mod symbols;
 pub mod dependencies;
 pub mod tests;
 pub mod watcher;
+pub mod highlighting;
 
 pub use error::Error;
 pub type Result<T> = std::result::Result<T, Error>;

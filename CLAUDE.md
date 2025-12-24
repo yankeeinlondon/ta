@@ -64,11 +64,12 @@ pnpm test                      # No tests defined
 ## Known Issues & TODOs
 
 ### Must Fix Before 1.0
-1. **TypeError.file field** - Always "unknown", not propagated from analyzer (type_error_visitor.rs:64)
-2. **TypeError.id field** - Hardcoded to "error", should parse from OxcDiagnostic (type_error_visitor.rs:62)
+1. ~~**TypeError.file field**~~ - ✅ FIXED: Now properly propagated from analyzer
+2. ~~**TypeError.id field**~~ - ✅ FIXED: Now parsed from OxcDiagnostic using extract_error_code()
 3. **--include-tests flag** - Declared but unused (source.rs:19)
 4. **Glob pattern validation** - No check for `..` path traversal (source.rs:38)
 5. **External handler execution** - Watch mode only logs to console (watch.rs)
+6. **NO_COLOR support** - Syntax highlighting doesn't respect NO_COLOR env var yet
 
 ### Suggested Improvements
 1. **Clippy warnings** - 2 needless lifetime warnings in dependencies.rs and tests.rs
@@ -94,9 +95,25 @@ ta source [pattern]            # Analyze type errors in source files
   --include-tests              # Include test files (NOT YET IMPLEMENTED)
 ```
 
-**Known Issues:**
-- Error IDs are hardcoded to "error" (should parse from OXC diagnostics)
-- File path always shows "unknown" in TypeError structs (not propagated)
+**Output Format:**
+```
+[❌] Identifier `userId` has already been declared
+  in processUser at ./src/errors.ts:6:8
+
+  function processUser() {
+      let userId = 1;
+      let userId = 2;  // Error
+      return userId;
+  }
+
+Found 3 type errors in 2 files (12 files without errors).
+```
+
+**Features:**
+- Context-aware code extraction (shows function/method scope, not entire file)
+- Smart boundary detection for module-level errors (stops at blank lines/closing braces)
+- Syntax highlighting with 24-bit RGB colors
+- 2-space indentation for visual nesting
 
 ### Symbol Analysis
 
@@ -158,9 +175,16 @@ The analyzer tracks scope context for errors using a stack pattern:
 
 ### Output Formats
 
-- **Console**: ANSI escape codes (RED, BLUE, CYAN, etc.) for syntax highlighting
-- **HTML**: Semantic elements with CSS classes (`error-block`, `keyword`, `type`)
+- **Console**: 24-bit RGB ANSI escape codes via syntect for syntax highlighting
+  - Uses `base16-ocean.dark` theme by default
+  - Code blocks indented by 2 spaces for visual nesting
+  - Error indicator: `[❌]` emoji with bold error messages
+- **HTML**: Semantic elements with inline styles from syntect
+  - Uses `Solarized (light)` theme by default
+  - Code blocks with proper indentation
 - **JSON**: serde_json serialization of data structures
+
+**Syntax Highlighting:** Powered by `syntect` with TextMate grammars. TypeScript uses JavaScript syntax (TS is JS superset).
 
 **Note:** JSON does NOT currently include console/HTML representations (planned feature).
 

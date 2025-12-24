@@ -2,160 +2,253 @@
 
 ## Structure
 
-This is a Rust workspace with an additional TypeScript package:
+This is a Rust workspace with TypeScript handler types:
 
-- `Cargo.toml` - Workspace configuration
-- `lib/Cargo.toml` - Core library (ta-lib)
-- `cli/Cargo.toml` - Command-line interface (ta)
-- `ts/package.json` - TypeScript handler types package (ta-handler)
+- `Cargo.toml` - Root workspace configuration
+- `lib/Cargo.toml` - Core TypeScript analysis library
+- `cli/Cargo.toml` - Command-line interface
+- `ts/package.json` - TypeScript handler type definitions
+- `scripts/package.json` - Build scripts and utilities
 
-## Rust Production Dependencies
+## Library Dependencies (`lib`)
 
-### [OXC (Oxidation Compiler)](https://github.com/oxc-project/oxc)
+### AST Parsing & Analysis
 
-**Versions:** 0.30 (multiple crates)
+- [oxc_parser](https://github.com/oxc-project/oxc) **v0.30**
 
-High-performance JavaScript and TypeScript tooling suite written in Rust. This project uses multiple OXC crates:
+    High-performance TypeScript/JavaScript parser written in Rust. Uses memory arena allocation (bumpalo) for fast AST operations. Part of the Oxidation Compiler project.
 
-- **oxc_parser** - Fast and conformant JavaScript/TypeScript parser supporting JSX, TSX, and Stage 3 Decorators
-- **oxc_semantic** - Semantic analysis providing symbol resolution and scope binding
-- **oxc_allocator** - Memory arena allocator for fast AST allocation and deallocation
-- **oxc_span** - Source code span and position tracking
-- **oxc_ast** - Abstract Syntax Tree definitions
-- **oxc_diagnostics** - Diagnostic reporting infrastructure
+- [oxc_semantic](https://docs.rs/oxc_semantic) **v0.30**
 
-### [clap](https://github.com/clap-rs/clap)
+    Semantic analyzer providing symbol resolution and scope binding for JavaScript/TypeScript code.
 
-**Version:** 4.5
+- [oxc_allocator](https://docs.rs/oxc_allocator) **v0.30**
 
-Full-featured, fast command-line argument parser for Rust. Provides both derive-based and builder-based APIs for creating CLI interfaces with comprehensive features including help generation, version display, subcommands, and argument validation. Used with the `derive` and `env` features.
+    Memory arena allocator for OXC AST nodes, enabling zero-cost AST drops.
 
-### [color-eyre](https://github.com/eyre-rs/eyre)
+- [oxc_span](https://docs.rs/oxc_span) **v0.30**
 
-**Version:** 0.6
+    Source position tracking for AST nodes and diagnostics.
 
-Custom error report handler providing colorful, human-oriented error reports. Part of the eyre ecosystem, it enhances panic messages and error reporting with backtraces, span traces, and consistent formatting.
+- [oxc_ast](https://docs.rs/oxc_ast) **v0.30**
 
-### [thiserror](https://github.com/dtolnay/thiserror)
+    Abstract syntax tree definitions for JavaScript and TypeScript.
 
-**Version:** 2.0
+- [oxc_diagnostics](https://docs.rs/oxc_diagnostics) **v0.30**
 
-Convenient derive macro for implementing `std::error::Error` trait. Eliminates boilerplate in error type definitions using attributes like `#[error("...")]` for Display messages and `#[from]` for automatic error conversion.
+    Diagnostic and error reporting infrastructure for OXC.
 
-### [miette](https://github.com/zkat/miette)
+### Serialization
 
-**Version:** 7
+- [serde](https://serde.rs/) **v1.0** (with `derive` feature)
 
-Fancy diagnostic reporting library extending `std::error::Error` with pretty, detailed diagnostic printing. Provides protocols for custom error reports with rich formatting and context. Used with the `derive` feature.
+    Industry-standard serialization framework for Rust. Provides `#[derive(Serialize, Deserialize)]` macros for automatic implementation.
 
-### [rayon](https://github.com/rayon-rs/rayon)
+- [serde_json](https://github.com/serde-rs/json) **v1.0**
 
-**Version:** 1.10
+    JSON serialization/deserialization using serde. Enables JSON output format for analysis results.
 
-Data parallelism library for Rust. Provides lightweight parallel iterators that convert sequential computations into parallel ones with minimal code changes (e.g., `iter()` → `par_iter()`). Guarantees data-race freedom.
+### Parallel Processing
 
-### [notify](https://github.com/notify-rs/notify)
+- [rayon](https://github.com/rayon-rs/rayon) **v1.10**
 
-**Version:** 7.0
+    Data parallelism library using work-stealing thread pool. Used for parallel file processing with per-thread allocators.
 
-Cross-platform filesystem notification library for Rust. Monitors file system events across different operating systems. Used by notable projects including cargo watch, rust-analyzer, and watchexec.
+### File System & Watching
 
-### [notify-debouncer-full](https://crates.io/crates/notify-debouncer-full)
+- [glob](https://github.com/rust-lang-nursery/glob) **v0.3**
 
-**Version:** 0.6.0
+    Pattern matching for file paths supporting `**/*.ts` style globs.
 
-Debounced file system event handler built on top of notify. Prevents rapid-fire events by grouping related filesystem changes together.
+- [notify](https://github.com/notify-rs/notify) **v7.0**
 
-### [glob](https://crates.io/crates/glob)
+    Cross-platform filesystem notification library. Used as the foundation for watch mode.
 
-**Version:** 0.3
+- [notify-debouncer-full](https://github.com/notify-rs/notify) **v0.6.0**
 
-Pattern matching library for filesystem paths supporting wildcards like `*` and `**`.
+    Debouncing wrapper for notify with 500ms delay to batch rapid file changes.
 
-### [serde](https://github.com/serde-rs/serde)
+### Error Handling
 
-**Version:** 1.0
+- [thiserror](https://github.com/dtolnay/thiserror) **v2.0**
 
-Framework for serializing and deserializing Rust data structures efficiently and generically. Used with the `derive` feature for automatic serialization implementation.
+    Derive macro for `std::error::Error` trait. Provides `#[derive(Error)]` for custom error types with `#[from]` and `#[source]` attributes.
 
-### [serde_json](https://github.com/serde-rs/json)
+- [miette](https://github.com/zkat/miette) **v7** (with `derive` feature)
 
-**Version:** 1.0
+    Fancy diagnostic reporting library with beautiful error messages and code snippets.
 
-JSON serialization/deserialization support for serde. Provides fast and correct JSON parsing and generation.
+### Logging
 
-### [env_logger](https://github.com/rust-cli/env_logger)
+- [log](https://github.com/rust-lang/log) **v0.4**
 
-**Version:** 0.11
+    Lightweight logging facade providing macros like `info!`, `debug!`, `warn!`, and `error!`.
 
-Simple logger configured via environment variables. Commonly used with the `log` crate for flexible logging configuration.
+### Output Formatting
 
-### [log](https://github.com/rust-lang/log)
+- [html-escape](https://github.com/magiclen/html-escape) **v0.2.13**
 
-**Version:** 0.4
+    HTML entity encoding for safe HTML output generation.
 
-Lightweight logging facade providing a single logging API that abstracts over the actual logging implementation.
+- [colored](https://github.com/mackwic/colored) **v2.1**
 
-### [html-escape](https://crates.io/crates/html-escape)
+    Terminal color and styling library for ANSI escape codes in console output.
 
-**Version:** 0.2.13
+- [syntect](https://github.com/trishume/syntect) **v5.2** (with default syntaxes/themes, HTML, parsing)
 
-Fast and correct HTML entity encoding and decoding library for preventing XSS vulnerabilities when generating HTML output.
+    Syntax highlighting using Sublime Text definitions. Provides ~16,000 lines/second highlighting performance.
 
-## Rust Development Dependencies
+- [pulldown-cmark](https://github.com/pulldown-cmark/pulldown-cmark) **v0.12**
 
-### [assert_cmd](https://github.com/assert-rs/assert_cmd)
+    Efficient CommonMark/Markdown parser using pull-parsing approach. Supports GFM extensions including tables and task lists.
 
-**Version:** 2
+### CLI Utilities
 
-Testing framework for CLI applications. Simplifies testing command-line programs by providing assertions for exit codes, stdout, stderr, and more.
+- [clap](https://github.com/clap-rs/clap) **v4.5.53** (with `derive` feature)
 
-### [predicates](https://github.com/assert-rs/predicates-rs)
+    Command-line argument parser. Uses derive API with `#[derive(Parser)]` for declarative CLI definitions.
 
-**Version:** 3
+## CLI Dependencies (`cli`)
 
-Boolean-valued functions for making assertions about values. Often used with assert_cmd for flexible test assertions.
+### Workspace Dependency
 
-### [proptest](https://github.com/proptest-rs/proptest)
+- **ta-lib** (path = `../lib`)
 
-**Version:** 1
+    Local workspace dependency providing core TypeScript analysis functionality.
 
-Property-based testing framework for Rust inspired by QuickCheck. Generates random test cases to find edge cases automatically.
+### CLI Framework
 
-### [insta](https://github.com/mitsuhiko/insta)
+- [clap](https://github.com/clap-rs/clap) **v4.5** (with `derive`, `env` features)
 
-**Version:** 1
+    Command-line argument parser with environment variable support.
 
-Snapshot testing library that stores test outputs and detects changes across test runs. Excellent for testing complex outputs like AST structures or formatted text.
+### Error Handling & Logging
 
-### [tempfile](https://github.com/Stebalien/tempfile)
+- [color-eyre](https://github.com/eyre-rs/color-eyre) **v0.6**
 
-**Version:** 3
+    Colorful error reports with panic hooks, backtraces, and span traces. Built on top of the eyre error handling library.
 
-Library for creating temporary files and directories that are automatically cleaned up when dropped.
+- [env_logger](https://github.com/rust-cli/env_logger) **v0.11**
 
-### [pretty_assertions](https://github.com/rust-pretty-assertions/rust-pretty-assertions)
+    Simple logger configured via `RUST_LOG` environment variable. Logs to stderr by default with configurable levels.
 
-**Version:** 1
+- [log](https://github.com/rust-lang/log) **v0.4**
 
-Drop-in replacement for `assert_eq!` and `assert_ne!` that provides colorful diffs when assertions fail, making test failures easier to diagnose.
+    Logging facade (same as lib dependency).
 
-## TypeScript Dependencies
+- [thiserror](https://github.com/dtolnay/thiserror) **v2.0**
 
-### [tsdown](https://github.com/rolldown/tsdown)
+    Error derive macros (same as lib dependency).
 
-**Version:** 0.18.1
+### File System & Output
 
-The elegant bundler for TypeScript libraries powered by Rolldown. Provides blazing-fast builds and declaration file generation using Oxc and Rolldown. Supports Rollup, Rolldown, and unplugin plugins.
+- [glob](https://github.com/rust-lang-nursery/glob) **v0.3.3**
 
-### [typescript](https://github.com/microsoft/TypeScript)
+    File path pattern matching.
 
-**Version:** 5.9.3
+- [ignore](https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore) **v0.4**
 
-TypeScript language compiler and tooling. Provides type checking and compilation from TypeScript to JavaScript.
+    Fast recursive directory iterator respecting .gitignore, .ignore, and file type filters. Part of ripgrep.
 
-### [bumpp](https://github.com/antfu-collective/bumpp)
+- [serde_json](https://github.com/serde-rs/json) **v1.0.145**
 
-**Version:** 10.3.2
+    JSON output format support.
 
-Interactive CLI tool for bumping version numbers. Supports conventional commits, monorepo workflows, and automatic changelog generation. Provides options for commit, tag, and push operations.
+- [colored](https://github.com/mackwic/colored) **v2.0**
+
+    Terminal color output.
+
+### Terminal Detection
+
+- [atty](https://github.com/softprops/atty) **v0.2** ⚠️ **DEPRECATED**
+
+    TTY detection for determining if output is to a terminal. **Note:** This crate is deprecated - consider migrating to `std::io::IsTerminal` (Rust 1.70+) or `is-terminal` crate.
+
+## TypeScript Handler Package (`ts`)
+
+### Build Tools
+
+- [tsdown](https://tsdown.dev/) **v0.18.1** (dev)
+
+    Modern TypeScript/JavaScript bundler built on Rolldown (written in Rust). Generates ESM bundles and declaration files with blazing-fast performance.
+
+- [typescript](https://www.typescriptlang.org/) **v5.9.3** (dev)
+
+    TypeScript compiler and language services for type checking and declaration generation.
+
+### Versioning
+
+- [bumpp](https://github.com/antfu/bumpp) **v10.3.2** (dev)
+
+    Interactive CLI for bumping package versions with git tag support.
+
+## Build Scripts (`scripts`)
+
+### Runtime
+
+- [bun](https://bun.sh/) **v1.3.5**
+
+    Fast JavaScript runtime and toolkit. Used for executing build scripts with native TypeScript support.
+
+### Type Definitions
+
+- [@types/bun](https://www.npmjs.com/package/@types/bun) **v1.3.5** (dev)
+
+    TypeScript type definitions for Bun runtime APIs.
+
+### Peer Dependencies
+
+- [typescript](https://www.typescriptlang.org/) **v5** (peer)
+
+    TypeScript compiler (peer dependency for scripts).
+
+## Development & Testing Dependencies
+
+### Testing (`lib/dev-dependencies`)
+
+- [proptest](https://github.com/proptest-rs/proptest) **v1**
+
+    Property-based testing framework inspired by Hypothesis. Generates arbitrary inputs and automatically shrinks failing test cases.
+
+- [insta](https://insta.rs/) **v1**
+
+    Snapshot testing library with VS Code integration. Automatically manages reference snapshots and provides beautiful diffs.
+
+- [tempfile](https://github.com/Stebalien/tempfile) **v3**
+
+    Secure cross-platform temporary file/directory creation with automatic cleanup on drop.
+
+- [pretty_assertions](https://github.com/rust-pretty-assertions/rust-pretty-assertions) **v1**
+
+    Better assertion failure messages with colorful diffs for easier debugging.
+
+- [serial_test](https://github.com/palfrey/serial_test) **v3**
+
+    Run tests serially using `#[serial]` attribute macro to avoid race conditions in filesystem tests.
+
+### Benchmarking (`lib/dev-dependencies`)
+
+- [criterion](https://github.com/bheisler/criterion.rs) **v0.5**
+
+    Statistics-driven micro-benchmarking with automatic regression detection and chart generation using gnuplot.
+
+### Integration Testing (`cli/dev-dependencies`)
+
+- [assert_cmd](https://github.com/assert-rs/assert_cmd) **v2**
+
+    Simplifies CLI integration testing with helpers for running binaries and asserting on exit codes, stdout, and stderr.
+
+- [predicates](https://github.com/assert-rs/predicates-rs) **v3**
+
+    Boolean-valued predicate functions for flexible assertions. Commonly used with assert_cmd for pattern matching in command outputs.
+
+## Release Profile Optimizations
+
+The workspace uses aggressive release optimizations:
+
+- **opt-level = 3** - Maximum optimization
+- **lto = true** - Link-time optimization across all crates
+- **codegen-units = 1** - Single codegen unit for better optimization
+- **strip = true** - Strip debug symbols from binary
+
+These settings significantly improve OXC parser performance at the cost of longer compile times.

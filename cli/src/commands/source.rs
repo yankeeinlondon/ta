@@ -3,6 +3,7 @@ use color_eyre::eyre::{Result, Context, eyre};
 use ta_lib::analyzer::{Analyzer, AnalysisOptions};
 use ta_lib::output::{OutputFormatter, OutputFormat};
 use ignore::WalkBuilder;
+use colored::*;
 
 /// Analyze source files for type errors
 #[derive(Parser, Debug)]
@@ -24,7 +25,7 @@ pub struct SourceArgs {
     pub max_errors: usize,
 }
 
-pub fn handle_source(args: SourceArgs, format: OutputFormat) -> Result<()> {
+pub fn handle_source(args: SourceArgs, format: OutputFormat, verbose: bool) -> Result<()> {
     log::debug!("Handling source command with args: {:?}", args);
 
     let options = AnalysisOptions {
@@ -93,7 +94,7 @@ pub fn handle_source(args: SourceArgs, format: OutputFormat) -> Result<()> {
         return Err(eyre!("No source files found"));
     }
 
-    eprintln!("Analyzing {} files...", files.len());
+    eprintln!("Analyzing {} files...\n", files.len());
     let result = analyzer.analyze_files(&files)?;
 
     let mut type_errors = result.type_errors;
@@ -121,10 +122,65 @@ pub fn handle_source(args: SourceArgs, format: OutputFormat) -> Result<()> {
     let output = OutputFormatter::format_type_errors(&type_errors, format);
     println!("{}", output);
 
+    // Calculate file statistics
     if !type_errors.is_empty() {
-        eprintln!("Found {} type errors.", type_errors.len());
+        // Count unique files with errors
+        let mut files_with_errors = std::collections::HashSet::new();
+        for error in &type_errors {
+            files_with_errors.insert(&error.file);
+        }
+        let files_with_errors_count = files_with_errors.len();
+        let files_without_errors_count = files.len().saturating_sub(files_with_errors_count);
+
+        // Show individual success messages for files without errors when verbose
+        if verbose && files_without_errors_count > 0 {
+            eprintln!();
+            for file_path in &files {
+                let file_str = file_path.to_string_lossy().to_string();
+                if !files_with_errors.contains(&file_str) {
+                    eprintln!("- ✅ {} has no type errors", file_str.green());
+                }
+            }
+            eprintln!();
+        }
+
+        // Format error count in red/bold, files-without-errors in dim/italic
+        let error_count = format!("{}", type_errors.len()).red().bold();
+        let without_errors_msg = format!(
+            "{} file{} without errors",
+            files_without_errors_count,
+            if files_without_errors_count == 1 { "" } else { "s" }
+        ).dimmed().italic();
+
+        eprintln!(
+            "Found {} type error{} in {} file{} ({}).",
+            error_count,
+            if type_errors.len() == 1 { "" } else { "s" },
+            files_with_errors_count,
+            if files_with_errors_count == 1 { "" } else { "s" },
+            without_errors_msg
+        );
+
+        // Return exit code 1 when type errors are found (per CLI best practices)
+        std::process::exit(1);
     } else {
-        eprintln!("No type errors found.");
+        // Show individual success messages when verbose
+        if verbose {
+            eprintln!();
+            for file_path in &files {
+                eprintln!("- ✅ {} has no type errors", file_path.to_string_lossy().green());
+            }
+            eprintln!();
+        }
+
+        let file_count = format!("{}", files.len()).bold();
+        let preposition = if files.len() == 1 { "in" } else { "across" };
+        eprintln!(
+            "- ✅ no type errors found {} {} file{}",
+            preposition,
+            file_count,
+            if files.len() == 1 { "" } else { "s" }
+        );
     }
 
     Ok(())

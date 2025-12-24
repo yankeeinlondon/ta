@@ -1,5 +1,6 @@
 use std::collections::HashSet;
-use crate::models::TypeError;
+use crate::models::{TypeError, SourceCode};
+use crate::highlighting::extract_code_context;
 use oxc_ast::visit::{walk, Visit};
 use oxc_ast::ast::*;
 use oxc_semantic::{Semantic, ScopeFlags};
@@ -62,6 +63,18 @@ impl<'a> TypeErrorVisitor<'a> {
         // OxcCode has scope (e.g., "TS") and number (e.g., "2322")
         let error_id = Self::extract_error_code(error);
 
+        // Extract code context if possible using the highlighting module
+        let source_code = extract_code_context(
+            self.source,
+            error_span,
+            self.semantic
+        ).ok().map(|ctx| SourceCode {
+            full_code: ctx.full_code,
+            display_code: ctx.display_code,
+            scope_type: ctx.scope_type,
+            scope_name: ctx.scope_name,
+        });
+
         self.errors.push(TypeError {
             id: error_id,
             message,
@@ -70,6 +83,7 @@ impl<'a> TypeErrorVisitor<'a> {
             column,
             scope: self.get_scope_string(),
             block,
+            source_code,
             span: error_span,
         });
 
