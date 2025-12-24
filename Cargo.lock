@@ -2052,7 +2052,7 @@ dependencies = [
  "color-eyre",
  "colored",
  "env_logger",
- "glob",
+ "globset",
  "ignore",
  "log",
  "predicates",

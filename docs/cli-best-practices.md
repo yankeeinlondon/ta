@@ -71,3 +71,10 @@ export type SourceOutput = TypeError[];
 - `FileOutput` - File dependencies from `ta file --json`
 - `DepsOutput` - Symbol dependencies from `ta deps --json`
 - `TestOutput` - Type tests from `ta test --json`
+
+## STDOUT and STDERR
+
+- all results of the command go to STDOUT, but
+- all diagnostics, progress info, summary info, etc. go to STDERR
+
+

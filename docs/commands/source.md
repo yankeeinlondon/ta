@@ -12,6 +12,7 @@ ta source -v [OPTIONS] [FILTERS]...  # Verbose mode
 ## Description
 
 The `source` command performs deep type analysis on TypeScript files, detecting semantic errors like:
+
 - Type mismatches
 - Redeclarations
 - Invalid operations
@@ -19,6 +20,7 @@ The `source` command performs deep type analysis on TypeScript files, detecting 
 - And all other errors detectable by OXC's TypeScript parser
 
 Results are displayed with:
+
 - **Syntax highlighting** (24-bit RGB ANSI colors)
 - **Context-aware code extraction** (shows relevant function/method, not entire file)
 - **Smart boundary detection** (stops at blank lines and closing braces for module-level errors)
@@ -29,15 +31,22 @@ Results are displayed with:
 
 ### `-v, --verbose`
 
-Show individual success messages for each file without errors.
+Show individual success messages for each file without errors and display the glob pattern being used.
 
 **Without verbose:**
+
 ```
+Analyzing 14 files...
+
 - ✅ no type errors found across 14 files
 ```
 
 **With verbose:**
+
 ```
+Using glob pattern: {src,scripts}/**/*.{ts,tsx}
+Analyzing 14 files...
+
 - ✅ ./src/api.ts has no type errors
 - ✅ ./src/network.ts has no type errors
 - ✅ ./src/types.ts has no type errors
@@ -46,6 +55,27 @@ Show individual success messages for each file without errors.
 - ✅ no type errors found across 14 files
 ```
 
+### `--glob <PATTERN>`
+
+Override the default glob pattern for finding TypeScript files.
+
+**Default pattern:** `{src,scripts}/**/*.{ts,tsx}`
+
+**Examples:**
+
+```bash
+# Analyze all TypeScript files in lib/ directory
+ta source --glob "lib/**/*.ts"
+
+# Analyze specific pattern
+ta source --glob "src/components/**/*.tsx"
+
+# Multiple directories
+ta source --glob "{src,lib,types}/**/*.ts"
+```
+
+**Note:** When using `--glob`, the pattern does NOT respect `.gitignore` files. Use the default behavior (without `--glob`) if you need `.gitignore` support.
+
 ## Arguments
 
 ### `[FILTERS]...`
@@ -53,6 +83,7 @@ Show individual success messages for each file without errors.
 Optional filter patterns to match against file paths. Multiple filters are OR'd together.
 
 **Examples:**
+
 ```bash
 ta source errors           # Files with "errors" in path
 ta source user auth        # Files with "user" OR "auth" in path
@@ -60,6 +91,7 @@ ta source src/api          # Files under src/api/
 ```
 
 **Default behavior (no filters):**
+
 - Analyzes all `.ts` and `.tsx` files in `src/` and `scripts/` directories
 - Respects `.gitignore`, `.ignore`, and other standard ignore files
 - Excludes test files by default (unless `--include-tests` is specified)
@@ -82,6 +114,7 @@ Found 3 type errors in 2 files (12 files without errors).
 ```
 
 **Note:** In the actual console output:
+
 - The error count (`3` in this example) appears in **red and bold**
 - The files-without-errors message (`12 files without errors`) appears _dimmed and italicized_
 - File paths are **clickable links** (in terminals supporting OSC8 hyperlinks like iTerm2, WezTerm, etc.)
@@ -100,6 +133,7 @@ This is separate from the `-v` flag, which controls user-facing output verbosity
 ## Exit Codes
 
 Following [CLI best practices](../cli-best-practices.md):
+
 - **0** - No type errors found (success)
 - **1** - Type errors detected (unsuccessful outcome)
 - **9** - Invalid CLI arguments (misuse)
